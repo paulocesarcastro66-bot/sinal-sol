@@ -1,0 +1,57 @@
+name: Sinal SOL v4
+
+# Fica ligado direto: cada execução dura ~5h40 checando a carteira a cada 10 s
+# e, no fim, chama a próxima. O agendamento abaixo é só reserva (religa se cair).
+# A carteira vem do secret WALLET e as posições ficam no cache (nada disso aparece no repositório).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: sinal-sol-v4
+  cancel-in-progress: false
+
+jobs:
+  vigiar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Recuperar posições (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: estado.json
+          key: estado-${{ github.run_id }}
+          restore-keys: estado-
+
+      - name: Vigiar carteira (v4)
+        id: vigiar
+        env:
+          TG_TOKEN:   ${{ secrets.TG_TOKEN }}
+          TG_CHAT:    ${{ secrets.TG_CHAT }}
+          HELIUS_KEY: ${{ secrets.HELIUS_KEY }}
+          WALLET:     ${{ secrets.WALLET }}
+        run: python -u monitor_v4.py
+
+      - name: Chamar a próxima execução
+        if: always() && (steps.vigiar.outcome == 'success' || steps.vigiar.outcome == 'cancelled')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run sinal_v4.yml --ref main -R "${{ github.repository }}"
+
+      - name: Guardar posições (cache)
+        if: always() && hashFiles('estado.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: estado.json
+          key: estado-${{ github.run_id }}-${{ github.run_attempt }}
