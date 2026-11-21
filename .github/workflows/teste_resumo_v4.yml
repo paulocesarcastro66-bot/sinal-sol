@@ -1,0 +1,35 @@
+name: Teste - mandar resumo v4 no Telegram
+
+# Botão manual: manda agora no Telegram as posições abertas, as operações fechadas
+# e o lucro dela (hoje / 7 dias / 30 dias). Não mexe no robô que está rodando.
+on:
+  workflow_dispatch:
+
+jobs:
+  resumo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Recuperar posições (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: estado.json
+          key: estado-teste-${{ github.run_id }}
+          restore-keys: estado-
+      - name: Mandar resumo
+        env:
+          TG_TOKEN:   ${{ secrets.TG_TOKEN }}
+          TG_CHAT:    ${{ secrets.TG_CHAT }}
+          HELIUS_KEY: ${{ secrets.HELIUS_KEY }}
+          WALLET:     ${{ secrets.WALLET }}
+        run: |
+          python -u -c "
+          import monitor_v4 as m
+          m.telegram('🧪 <b>TESTE do sinal v4</b> — carteira e posições em segredo. Abaixo, o que ele tem guardado da carteira ' + m.APELIDO + ':')
+          e = m.carregar_estado()
+          m.enviar_resumo(e, m.preco_sol(), False)
+          print('resumo enviado')
+          "
